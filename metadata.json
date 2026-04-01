@@ -1,0 +1,9 @@
+{
+  "name": "TeenConnect: Social & Discovery",
+  "description": "A vibrant social and discovery app for teens (13-19). Customize your profile with photos and videos, find compatible matches, follow friends, and join live streams with voice and video chat. Express yourself with custom avatars and real-time interactions.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

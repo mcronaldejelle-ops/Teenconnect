@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required, 1-50 chars)
+    //   - age: number (required, 13-100)
+    //   - bio: string (optional, 0-500 chars)
+    //   - avatarUrl: string (optional, URL)
+    //   - media: list (optional, max 10 items)
+    //   - followersCount: number (optional, >= 0)
+    //   - followingCount: number (optional, >= 0)
+    //   - friendsCount: number (optional, >= 0)
+    //   - isLive: bool (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: likes
+    // Document ID: {likeId}
+    // Fields:
+    //   - fromUid: string (required, must match auth.uid)
+    //   - toUid: string (required)
+    //   - type: string (required, 'like', 'nope', 'superlike')
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: follows
+    // Document ID: {followId}
+    // Fields:
+    //   - followerUid: string (required, must match auth.uid)
+    //   - followingUid: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: friends
+    // Document ID: {friendId}
+    // Fields:
+    //   - uids: list (required, must contain auth.uid)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: chats
+    // Document ID: {chatId}
+    //   Subcollection: messages
+    //   Document ID: {messageId}
+    //   Fields:
+    //     - senderUid: string (required, must match auth.uid)
+    //     - receiverUid: string (optional)
+    //     - liveId: string (optional)
+    //     - text: string (required, 1-1000 chars)
+    //     - mediaUrl: string (optional, URL)
+    //     - createdAt: timestamp (required)
+    //
+    // Collection: lives
+    // Document ID: {liveId}
+    // Fields:
+    //   - hostUid: string (required, must match auth.uid)
+    //   - title: string (optional, 0-100 chars)
+    //   - viewerCount: number (optional, >= 0)
+    //   - status: string (required, 'active', 'ended')
+    //   - startedAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "mcronaldejelle@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'age', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 50 &&
+             data.age is number && data.age >= 13 && data.age <= 100 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidLike(data) {
+      return data.keys().hasAll(['fromUid', 'toUid', 'type', 'createdAt']) &&
+             data.fromUid == request.auth.uid &&
+             data.type in ['like', 'nope', 'superlike'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFollow(data) {
+      return data.keys().hasAll(['followerUid', 'followingUid', 'createdAt']) &&
+             data.followerUid == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFriend(data) {
+      return data.keys().hasAll(['uids', 'createdAt']) &&
+             data.uids is list && data.uids.size() == 2 &&
+             request.auth.uid in data.uids &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderUid', 'text', 'createdAt']) &&
+             data.senderUid == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 1000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidLive(data) {
+      return data.keys().hasAll(['hostUid', 'status', 'startedAt']) &&
+             data.hostUid == request.auth.uid &&
+             data.status in ['active', 'ended'] &&
+             data.startedAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data);
+      allow update: if (isOwner(uid) && isValidUser(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /likes/{likeId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create: if isAuthenticated() && isValidLike(request.resource.data);
+      allow update: if false; // Likes are immutable
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.fromUid;
+    }
+
+    match /follows/{followId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFollow(request.resource.data);
+      allow update: if false; // Follows are immutable
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.followerUid;
+    }
+
+    match /friends/{friendId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.uids;
+      allow create: if isAuthenticated() && isValidFriend(request.resource.data);
+      allow update: if false; // Friendships are immutable
+      allow delete: if isAuthenticated() && request.auth.uid in resource.data.uids;
+    }
+
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderUid || 
+        request.auth.uid == resource.data.receiverUid ||
+        (resource.data.liveId != null && isAuthenticated())
+      );
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      allow update: if false; // Messages are immutable
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.senderUid;
+    }
+
+    match /lives/{liveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidLive(request.resource.data);
+      allow update: if (isAuthenticated() && request.auth.uid == resource.data.hostUid && isValidLive(request.resource.data)) || isAdmin();
+      allow delete: if (isAuthenticated() && request.auth.uid == resource.data.hostUid) || isAdmin();
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile information, including avatar, media, and social stats.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "age": { "type": "integer", "description": "User's age (13+)." },
+        "bio": { "type": "string", "description": "User's biography." },
+        "avatarUrl": { "type": "string", "description": "URL to the user's avatar image." },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": { "type": "string" },
+              "type": { "type": "string", "enum": ["image", "video"] },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "followersCount": { "type": "integer", "description": "Number of followers." },
+        "followingCount": { "type": "integer", "description": "Number of users followed." },
+        "friendsCount": { "type": "integer", "description": "Number of friends." },
+        "isLive": { "type": "boolean", "description": "Whether the user is currently live." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "age"]
+    },
+    "Like": {
+      "title": "Profile Like",
+      "description": "A like interaction between users for discovery.",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string" },
+        "toUid": { "type": "string" },
+        "type": { "type": "string", "enum": ["like", "nope", "superlike"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "toUid", "type"]
+    },
+    "Follow": {
+      "title": "Follow Relationship",
+      "description": "A follow relationship between users.",
+      "type": "object",
+      "properties": {
+        "followerUid": { "type": "string" },
+        "followingUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerUid", "followingUid"]
+    },
+    "Friend": {
+      "title": "Friendship",
+      "description": "A mutual friendship between users.",
+      "type": "object",
+      "properties": {
+        "uids": { "type": "array", "items": { "type": "string" }, "description": "Array of the two user UIDs." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uids"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A message sent in a chat or live stream.",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string" },
+        "receiverUid": { "type": "string", "description": "Optional for direct chat." },
+        "liveId": { "type": "string", "description": "Optional for live stream chat." },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderUid", "text", "createdAt"]
+    },
+    "LiveStream": {
+      "title": "Live Stream",
+      "description": "An active live stream session.",
+      "type": "object",
+      "properties": {
+        "hostUid": { "type": "string" },
+        "title": { "type": "string" },
+        "viewerCount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["active", "ended"] },
+        "startedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hostUid", "status", "startedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles." },
+    "/likes/{likeId}": { "schema": "Like", "description": "Discovery likes." },
+    "/follows/{followId}": { "schema": "Follow", "description": "Social follows." },
+    "/friends/{friendId}": { "schema": "Friend", "description": "Mutual friendships." },
+    "/chats/{chatId}/messages/{messageId}": { "schema": "ChatMessage", "description": "Chat messages." },
+    "/lives/{liveId}": { "schema": "LiveStream", "description": "Live stream sessions." }
+  }
+}
